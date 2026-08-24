@@ -89,7 +89,7 @@ textarea{min-height:160px;resize:vertical}
 </head>
 <body>
 <header>
-  <h1>MUISTIO <span class="small">iPhone PWA V1.0</span></h1>
+  <h1>MUISTIO <span class="small">iPhone PWA V1.1 Offline</span></h1>
   <div id="status" class="small">Paikallinen tila</div>
   <div class="syncbar">
     <button onclick="exportJson()">⬆ VIE JSON</button>
@@ -418,11 +418,19 @@ function handleVoice(s){
  }
  speak('En tunnistanut komentoa.');
 }
-// Service worker only when app is served over http/https.
-// Direct index.html use on Windows remains fully functional without it.
-if('serviceWorker' in navigator && location.protocol!=='file:'){
- navigator.serviceWorker.register('sw.js').catch(()=>{});
+async function registerOfflineWorker(){
+ if(!('serviceWorker' in navigator) || location.protocol==='file:') return;
+ try{
+   const reg=await navigator.serviceWorker.register('./sw.js',{scope:'./'});
+   await navigator.serviceWorker.ready;
+   // Ask the active worker to refresh the static cache in the background.
+   if(reg.active) reg.active.postMessage({type:'REFRESH_STATIC_CACHE'});
+ }catch(err){
+   console.warn('Service worker registration failed',err);
+ }
 }
+window.addEventListener('online',()=>{registerOfflineWorker()});
+registerOfflineWorker();
 loadLocal();
 </script>
 </body>
