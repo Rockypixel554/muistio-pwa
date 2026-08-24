@@ -1,0 +1,17 @@
+{
+  "name": "Muistio iPhone",
+  "short_name": "Muistio",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f3f5f7",
+  "theme_color": "#17191d",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

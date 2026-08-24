@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#15171b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Muistio">
+<meta name="format-detection" content="telephone=no">
+<title>Muistio</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  color:#17191d;background:#f3f5f7
+}
+*{box-sizing:border-box}
+body{margin:0;background:#f3f5f7}
+button,input,textarea,select{font:inherit}
+header{
+  position:sticky;top:0;z-index:20;background:#17191d;color:#fff;
+  padding:calc(13px + env(safe-area-inset-top)) 16px 12px
+}
+header h1{font-size:25px;margin:0}
+.small{font-size:13px;color:#aeb5bf;margin-top:3px}
+.syncbar{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+button{
+  border:0;border-radius:12px;padding:12px 14px;
+  font-weight:700;cursor:pointer
+}
+.syncbar button{background:#343942;color:white}
+nav{
+  position:sticky;top:112px;z-index:15;background:#f3f5f7;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:10px
+}
+nav button{background:white;font-size:13px;padding:10px 5px}
+nav button.active{background:#17191d;color:white}
+main{padding:0 12px 105px;max-width:980px;margin:auto}
+.card{
+  background:#fff;border-radius:17px;padding:15px;margin:10px 0;
+  box-shadow:0 1px 6px #00000014
+}
+.hero{font-size:24px;font-weight:750}
+.meta{font-size:13px;color:#69707a;margin-bottom:8px}
+.tasktext{font-size:18px;font-weight:650;white-space:pre-wrap;overflow-wrap:anywhere}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}
+.actions button{background:#eceff2}
+.actions .primary{background:#17191d;color:#fff}
+.actions .wide{grid-column:1/-1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.status-good{color:#18794e;font-weight:700}
+.status-warn{color:#9a6700;font-weight:700}
+.empty{text-align:center;color:#69707a;padding:45px 8px}
+.fab{
+ position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));
+ width:62px;height:62px;border-radius:50%;font-size:30px;
+ background:#17191d;color:#fff;box-shadow:0 4px 17px #0004;z-index:25
+}
+.voice{
+ position:fixed;left:18px;bottom:calc(18px + env(safe-area-inset-bottom));
+ height:62px;border-radius:31px;padding:0 20px;background:#17191d;
+ color:white;box-shadow:0 4px 17px #0004;z-index:25
+}
+dialog{
+ border:0;border-radius:18px;width:min(92vw,720px);padding:18px;
+ box-shadow:0 12px 50px #0005
+}
+dialog::backdrop{background:#0007}
+textarea,input,select{
+ width:100%;border:1px solid #cdd2d8;border-radius:10px;
+ padding:11px;margin:6px 0;background:#fff
+}
+textarea{min-height:160px;resize:vertical}
+.dategrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dlgbuttons{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+.hidden{display:none}
+.dayhead{font-size:17px;font-weight:800;margin:18px 2px 6px}
+.badge{display:inline-block;background:#eceff2;padding:4px 8px;border-radius:999px;font-size:12px}
+.settingsRow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+@media (min-width:760px){
+ header{padding-left:24px;padding-right:24px}
+ nav{top:111px;max-width:980px;margin:auto}
+ main{padding-left:20px;padding-right:20px}
+ .tasktext{font-size:19px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>MUISTIO <span class="small">iPhone PWA V1.0</span></h1>
+  <div id="status" class="small">Paikallinen tila</div>
+  <div class="syncbar">
+    <button onclick="exportJson()">⬆ VIE JSON</button>
+    <button onclick="$('fileImport').click()">⬇ TUO JSON</button>
+  </div>
+  <input id="fileImport" class="hidden" type="file" accept=".json,application/json">
+</header>
+
+<nav>
+  <button id="tabHome" onclick="setView('home')">Muistio</button>
+  <button id="tabTasks" onclick="setView('tasks')">Tehtävät</button>
+  <button id="tabCalendar" onclick="setView('calendar')">Kalenteri</button>
+  <button id="tabHistory" onclick="setView('history')">Historia</button>
+</nav>
+
+<main id="app"></main>
+<button class="voice" onclick="startVoice()">🎙 Puhu</button>
+<button class="fab" onclick="openTaskDialog()">＋</button>
+
+<dialog id="taskDlg">
+  <h2 id="taskDlgTitle">Tehtävä</h2>
+  <textarea id="taskText" placeholder="Kirjoita tehtävä"></textarea>
+  <select id="taskKind">
+    <option value="TASK">Tehtävä</option>
+    <option value="WAITING">Odotan</option>
+  </select>
+  <div class="dategrid">
+    <input id="dueDate" type="date">
+    <input id="dueTime" type="time" step="60">
+  </div>
+  <div class="dlgbuttons">
+    <button onclick="copyTaskText()">Kopioi</button>
+    <button onclick="pasteTaskText()">Liitä</button>
+    <button onclick="closeTaskDialog()">Peruuta</button>
+    <button style="background:#17191d;color:white" onclick="saveTaskDialog()">Tallenna</button>
+  </div>
+</dialog>
+
+<script>
+const $=id=>document.getElementById(id);
+const KEY='muistio_unified_v1';
+let view='home', editingId=null;
+let db={schema:4,tasks:[],events:[],meta:{lastExport:0,lastImport:0,lastChange:0}};
+
+function now(){return Date.now()}
+function uuid(){return (crypto.randomUUID?crypto.randomUUID():'id-'+now()+'-'+Math.random().toString(16).slice(2))}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+
+function openDb(){
+ return new Promise((resolve,reject)=>{
+  const req=indexedDB.open('MuistioIPhone',1);
+  req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('kv'))req.result.createObjectStore('kv')};
+  req.onsuccess=()=>resolve(req.result);
+  req.onerror=()=>reject(req.error);
+ });
+}
+async function kvGet(key,fallback){
+ try{
+  const idb=await openDb();
+  return await new Promise(resolve=>{
+   const tx=idb.transaction('kv','readonly');
+   const req=tx.objectStore('kv').get(key);
+   req.onsuccess=()=>resolve(req.result===undefined?fallback:req.result);
+   req.onerror=()=>resolve(fallback);
+  });
+ }catch{return fallback}
+}
+async function kvSet(key,value){
+ const idb=await openDb();
+ return await new Promise((resolve,reject)=>{
+  const tx=idb.transaction('kv','readwrite');
+  tx.objectStore('kv').put(value,key);
+  tx.oncomplete=()=>resolve();
+  tx.onerror=()=>reject(tx.error);
+ });
+}
+async function saveLocal(mark=true){
+ if(mark) db.meta.lastChange=now();
+ await kvSet('state',db);
+ updateStatus();
+ render();
+}
+async function loadLocal(){
+ const x=await kvGet('state',null);
+ if(x){
+  db.schema=4;
+  db.tasks=Array.isArray(x.tasks)?x.tasks:[];
+  db.events=Array.isArray(x.events)?x.events:[];
+  db.meta=x.meta||{lastExport:0,lastImport:0,lastChange:0};
+ }
+ updateStatus(); render();
+}
+function fmt(ms){return ms?new Date(ms).toLocaleString('fi-FI',{dateStyle:'short',timeStyle:'short'}):'-'}
+function dueText(ms){return ms?fmt(ms):'Ei ajankohtaa'}
+function updateStatus(){
+ const dirty=(db.meta.lastChange||0)>(db.meta.lastExport||0);
+ $('status').innerHTML=(dirty?'<span class="status-warn">🟠 Muutoksia viemättä</span>':'<span class="status-good">🟢 JSON ajan tasalla</span>')
+ +' • Vienti '+fmt(db.meta.lastExport)+' • Tuonti '+fmt(db.meta.lastImport);
+}
+function setView(v){view=v;render()}
+function activeTabs(){
+ ['Home','Tasks','Calendar','History'].forEach(x=>$('tab'+x).classList.toggle('active',view===x.toLowerCase()))
+}
+function render(){
+ activeTabs();
+ const app=$('app');
+ if(view==='home') renderHome(app);
+ if(view==='tasks') renderTasks(app);
+ if(view==='calendar') renderCalendar(app);
+ if(view==='history') renderHistory(app);
+}
+function renderHome(app){
+ const open=db.tasks.filter(t=>!t.done).sort((a,b)=>(a.dueEpochMs??9e15)-(b.dueEpochMs??9e15));
+ const next=open[0];
+ app.innerHTML=`
+ <section class="card">
+   <div class="hero">Avoimia tehtäviä: ${open.length}</div>
+   <div class="meta" style="margin-top:8px">${next?'Seuraava: '+esc(next.title)+' • '+esc(dueText(next.dueEpochMs)):'Ei avoimia tehtäviä'}</div>
+ </section>
+ <section class="grid2">
+   <button class="card" onclick="openTaskDialog()">＋ Uusi tehtävä</button>
+   <button class="card" onclick="openTaskDialog(null,'WAITING')">⏳ Uusi odotan-asia</button>
+ </section>
+ <section class="card">
+   <div style="font-weight:800">Offline-first iPhone</div>
+   <div class="meta" style="margin-top:7px">Kaikki tehtävät ja historia tallennetaan iPhoneen. OneDrivea käytetään vain MUISTIO_SYNC.json-tiedoston vientiin ja tuontiin.</div>
+ </section>
+ <section class="card">
+   <div style="font-weight:800">Asenna kotinäyttöön</div>
+   <div class="meta" style="margin-top:7px">Safari → Jaa → Lisää Koti-valikkoon. Tämän jälkeen Muistio avautuu omana sovellusikkunana.</div>
+ </section>`;
+}
+function renderTasks(app){
+ const open=db.tasks.filter(t=>!t.done).sort((a,b)=>(a.dueEpochMs??9e15)-(b.dueEpochMs??9e15));
+ if(!open.length){app.innerHTML='<div class="empty">Ei avoimia tehtäviä.</div>';return}
+ app.innerHTML=open.map(t=>`
+ <section class="card">
+   <div class="meta">${esc(t.kind||'TASK')} • ${esc(dueText(t.dueEpochMs))}</div>
+   <div class="tasktext">${esc(t.title)}</div>
+   <div class="actions">
+     <button onclick="openTaskDialog('${t.id}')">✎ Muokkaa tekstiä</button>
+     <button onclick="openTaskDialog('${t.id}',null,true)">🕒 Ajankohta</button>
+     <button class="primary wide" onclick="completeTask('${t.id}')">${t.kind==='WAITING'?'✓ Saatu':'✓ Tehty'}</button>
+   </div>
+ </section>`).join('');
+}
+function renderCalendar(app){
+ const open=db.tasks.filter(t=>!t.done&&t.dueEpochMs).sort((a,b)=>a.dueEpochMs-b.dueEpochMs);
+ if(!open.length){app.innerHTML='<div class="empty">Kalenterissa ei ole ajoitettuja tehtäviä.</div>';return}
+ const groups={};
+ for(const t of open){
+   const d=new Date(t.dueEpochMs);
+   const key=d.toISOString().slice(0,10);
+   (groups[key]??=[]).push(t);
+ }
+ app.innerHTML=Object.entries(groups).map(([k,items])=>{
+   const d=new Date(k+'T12:00:00');
+   const head=d.toLocaleDateString('fi-FI',{weekday:'long',day:'numeric',month:'long'});
+   return `<div class="dayhead">${esc(head)}</div>`+items.map(t=>`
+     <section class="card">
+       <div class="meta">${new Date(t.dueEpochMs).toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'})} • ${esc(t.kind)}</div>
+       <div class="tasktext">${esc(t.title)}</div>
+       <div class="actions"><button onclick="openTaskDialog('${t.id}')">Muokkaa</button><button onclick="completeTask('${t.id}')">Tehty</button></div>
+     </section>`).join('');
+ }).join('');
+}
+function renderHistory(app){
+ const ev=[...db.events].sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+ if(!ev.length){app.innerHTML='<div class="empty">Historia on tyhjä.</div>';return}
+ app.innerHTML=ev.map(e=>`
+ <section class="card">
+  <div class="meta">${esc(fmt(e.timestamp))} <span class="badge">${esc(e.event)}</span></div>
+  <div class="tasktext">${esc(e.title)}</div>
+  ${e.detail?`<div class="meta" style="margin-top:8px">${esc(e.detail)}</div>`:''}
+ </section>`).join('');
+}
+function pad(n){return String(n).padStart(2,'0')}
+function fillDue(ms){
+ if(!ms){$('dueDate').value='';$('dueTime').value='';return}
+ const d=new Date(ms);
+ $('dueDate').value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+ $('dueTime').value=`${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function readDue(){
+ const ds=$('dueDate').value;
+ if(!ds)return null;
+ const [y,m,d]=ds.split('-').map(Number);
+ const [h,mi]=($('dueTime').value||'09:00').split(':').map(Number);
+ return new Date(y,m-1,d,h||0,mi||0,0,0).getTime();
+}
+function openTaskDialog(id=null,kind=null,dateOnly=false){
+ editingId=id;
+ const t=id?db.tasks.find(x=>x.id===id):null;
+ $('taskDlgTitle').textContent=t?'Muokkaa tehtävää':'Uusi tehtävä';
+ $('taskText').value=t?.title||'';
+ $('taskKind').value=t?.kind||kind||'TASK';
+ fillDue(t?.dueEpochMs||null);
+ $('taskDlg').showModal();
+ setTimeout(()=>dateOnly?$('dueDate').focus():$('taskText').focus(),60);
+}
+function closeTaskDialog(){$('taskDlg').close()}
+function addEvent(t,event,detail=''){
+ db.events.push({id:uuid(),taskId:t.id,event,timestamp:now(),title:t.title,detail});
+ if(db.events.length>5000)db.events=db.events.slice(-5000);
+}
+async function copyTaskText(){
+ const v=$('taskText').value;
+ try{await navigator.clipboard.writeText(v)}
+ catch{$('taskText').select();document.execCommand('copy')}
+}
+async function pasteTaskText(){
+ try{
+   const s=await navigator.clipboard.readText();
+   const e=$('taskText'),a=e.selectionStart,b=e.selectionEnd;
+   e.setRangeText(s,a,b,'end');
+ }catch{alert('Liitä teksti normaalilla selaimen Liitä-komennolla.')}
+}
+async function saveTaskDialog(){
+ const title=$('taskText').value.trim();
+ if(!title){alert('Kirjoita tehtävän teksti.');return}
+ const due=readDue(),kind=$('taskKind').value;
+ if(editingId){
+   const t=db.tasks.find(x=>x.id===editingId); if(!t)return;
+   const oldTitle=t.title,oldDue=t.dueEpochMs;
+   t.title=title;t.kind=kind;t.dueEpochMs=due;t.updatedAt=now();
+   addEvent(t,'UPDATED',(oldTitle!==title?oldTitle+' -> '+title:'')+(oldDue!==due?' Ajankohta päivitetty':''));
+ }else{
+   const t={id:uuid(),title,kind,dueEpochMs:due,done:false,completedAt:null,createdAt:now(),updatedAt:now(),source:'iphone-pwa'};
+   db.tasks.push(t);addEvent(t,'CREATED','iPhone PWA');
+ }
+ closeTaskDialog();await saveLocal(true);
+}
+async function completeTask(id){
+ const t=db.tasks.find(x=>x.id===id);if(!t)return;
+ t.done=true;t.completedAt=now();t.updatedAt=t.completedAt;
+ addEvent(t,'COMPLETED','iPhone PWA');saveLocal(true);
+}
+function packageData(device='html'){
+ return {schema:4,exportedAt:now(),device,tasks:db.tasks,events:db.events};
+}
+async function exportJson(){
+ const data=JSON.stringify(packageData(),null,2);
+ const file=new File([data],'MUISTIO_SYNC.json',{type:'application/json'});
+ try{
+   if(navigator.canShare&&navigator.canShare({files:[file]})){
+     await navigator.share({files:[file],title:'MUISTIO_SYNC.json'});
+   }else{
+     const url=URL.createObjectURL(file),a=document.createElement('a');
+     a.href=url;a.download='MUISTIO_SYNC.json';document.body.appendChild(a);a.click();a.remove();
+     setTimeout(()=>URL.revokeObjectURL(url),3000);
+   }
+   db.meta.lastExport=now();await saveLocal(false);
+ }catch{}
+}
+$('fileImport').addEventListener('change',async e=>{
+ const f=e.target.files?.[0]; if(!f)return;
+ try{
+   const incoming=JSON.parse(await f.text());
+   if(!Array.isArray(incoming.tasks)||!Array.isArray(incoming.events))throw Error('Tiedosto ei ole MUISTIO_SYNC.json');
+   // Snapshot before every import. Keep 10 latest backups in IndexedDB.
+   const backups=await kvGet('backups',[]);
+   backups.push({at:now(),data:packageData('backup')});
+   while(backups.length>10)backups.shift();
+   await kvSet('backups',backups);
+
+   const map=new Map(db.tasks.map(t=>[t.id,t]));
+   let added=0,updated=0,unchanged=0;
+   for(const t of incoming.tasks){
+     const old=map.get(t.id);
+     if(!old){map.set(t.id,t);added++}
+     else if((t.updatedAt||0)>(old.updatedAt||0)){map.set(t.id,t);updated++}
+     else unchanged++;
+   }
+   db.tasks=[...map.values()];
+
+   const emap=new Map(db.events.map(x=>[x.id,x])),before=emap.size;
+   for(const ev of incoming.events){
+     const old=emap.get(ev.id);
+     if(!old||(ev.timestamp||0)>(old.timestamp||0))emap.set(ev.id,ev);
+   }
+   db.events=[...emap.values()].sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)).slice(-5000);
+   db.meta.lastImport=now();db.meta.lastChange=now();
+   await saveLocal(false);
+   alert(`TUONTI VALMIS\n\nUusia: ${added}\nPäivitetty: ${updated}\nEnnallaan: ${unchanged}\nUusia historiatapahtumia: ${emap.size-before}\n\nVarmuuskopio tehtiin automaattisesti.`);
+ }catch(err){alert('Tuonti epäonnistui: '+err.message)}
+ finally{e.target.value=''}
+});
+function speak(s){
+ try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(s);u.lang='fi-FI';speechSynthesis.speak(u)}catch{}
+}
+function startVoice(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){
+   alert('Selain ei tarjoa erillistä puheentunnistusrajapintaa. Käytä laitteen näppäimistön mikrofonisanelua tehtäväkentässä.');
+   return;
+ }
+ const r=new SR();r.lang='fi-FI';r.interimResults=false;r.maxAlternatives=1;
+ r.onresult=e=>handleVoice(e.results[0][0].transcript.trim());
+ r.onerror=()=>alert('Puheentunnistus ei onnistunut.');
+ try{r.start()}catch{}
+}
+function bestOpenMatch(q){
+ const words=q.toLowerCase().split(/\s+/).filter(x=>x.length>2);
+ return db.tasks.filter(t=>!t.done).map(t=>({t,s:words.filter(w=>t.title.toLowerCase().includes(w)).length})).sort((a,b)=>b.s-a.s)[0];
+}
+function handleVoice(s){
+ const q=s.toLowerCase();
+ if(q.startsWith('lisää tehtävä')||q.startsWith('lisaa tehtava')){
+   const title=s.replace(/^lisää tehtävä/i,'').replace(/^lisaa tehtava/i,'').trim();
+   if(!title){openTaskDialog();return}
+   const t={id:uuid(),title,kind:'TASK',dueEpochMs:null,done:false,completedAt:null,createdAt:now(),updatedAt:now(),source:'voice'};
+   db.tasks.push(t);addEvent(t,'CREATED','voice');saveLocal(true);speak('Tehtävä lisätty.');return;
+ }
+ if(q.includes('mitä')&&q.includes('huomen')){
+   const d=new Date();d.setDate(d.getDate()+1);
+   const arr=db.tasks.filter(t=>!t.done&&t.dueEpochMs&&new Date(t.dueEpochMs).toDateString()===d.toDateString());
+   speak(arr.length?`Huomenna sinulla on ${arr.length} tehtävää. `+arr.map(x=>x.title).join('. '):'Huomenna ei ole tehtäviä.');return;
+ }
+ if(q.startsWith('muokkaa tehtävää')||q.startsWith('muokkaa tehtava')){
+   const hit=bestOpenMatch(q.replace('muokkaa tehtävää','').replace('muokkaa tehtava',''));
+   if(hit&&hit.s>0)openTaskDialog(hit.t.id);else speak('En löytänyt tehtävää.');return;
+ }
+ if(q.startsWith('merkitse')&&(q.includes('tehdyksi')||q.includes('valmiiksi'))){
+   const hit=bestOpenMatch(q.replace('merkitse','').replace('tehdyksi','').replace('valmiiksi',''));
+   if(hit&&hit.s>0){completeTask(hit.t.id);speak('Tehtävä merkitty valmiiksi.')}else speak('En löytänyt tehtävää.');return;
+ }
+ speak('En tunnistanut komentoa.');
+}
+// Service worker only when app is served over http/https.
+// Direct index.html use on Windows remains fully functional without it.
+if('serviceWorker' in navigator && location.protocol!=='file:'){
+ navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+loadLocal();
+</script>
+</body>
+</html>
